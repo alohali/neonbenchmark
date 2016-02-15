@@ -12,13 +12,55 @@
 void gemv_neon(float *a, float *b, float *c, int m, int k){
 
     for(int i=0; i<m; i+=16){
-/*
-    __asm__ __volatile__ (
-      :
-      :"r"(c+i),"r"(a+i),"r"(b), "r"(k)
-      :"cc","r0","r1","r2","r3","q0","q1","q2","q3"
-    );
-    */
+      float *at = a + i;
+      float *bt = b;
+      float *ct = c + i;
+      float32x4_t btest = vdupq_n_f32(1.);//, vdupq_n_f32(0.),vdupq_n_f32(0.),vdupq_n_f32(0.)};
+      __asm__ __volatile__ (
+        "mov     r1, %6                     \n"
+        "veor    q6, q6, q6                 \n"
+        "veor    q7, q7, q7                 \n"
+        "veor    q8, q8, q8                 \n"
+        "veor    q9, q9, q9                 \n"
+        ".align  8                          \n"
+        "0:                                 \n"
+        "ldr         r0,    [%1]!         \n"
+        "vld1.f32    {d0-d1},  [%0]!         \n"
+        "vld1.f32    {d2-d3},  [%0]!         \n"
+        "vld1.f32    {d4-d5},  [%0]!         \n"
+        "vld1.f32    {d6-d7},  [%0]         \n"
+        "vmov.f32     q5, 1.0                    \n"
+
+        "add        %0, %7               \n"
+        "vmlaq.f32    q6,  q0, q5         \n"
+        "vmlaq.f32    q7,  q1, q5         \n"
+        "vmlaq.f32    q8,  q2, q5         \n"
+        "vmlaq.f32    q9,  q3, q5         \n"
+        "subs         r1, #1               \n"
+        "bne        0b                   \n"
+
+        "vst1.f32    {d12-d13},  [%2]!      \n"
+        "vst1.f32    {d14-d15},  [%2]!      \n"
+        "vst1.f32    {d16-d17},  [%2]!      \n"
+        "vst1.f32    {d18-d19},  [%2]      \n"
+
+        :"=r"(at),   // %0
+         "=r"(bt),  // %1
+         "=r"(ct)  // %2
+        :"0"(at),    // %
+         "1"(bt),
+         "2"(ct),
+         "r"(k),
+         "r"(m-12),   // %8
+         "w"(btest)
+        : "cc", "memory", "r0","r1", "q0", "q1", "q2", "q3", "q4", "q5","q6", "q7", "q8", "q9"
+      );
+    }
+}
+
+void gemv_neon_intrin(float *a, float *b, float *c, int m, int k){
+
+    for(int i=0; i<m; i+=16){
         float32x4_t vb;
         float32x4_t va[4];
         float32x4_t vc[4] = {vdupq_n_f32(0.), vdupq_n_f32(0.),vdupq_n_f32(0.),vdupq_n_f32(0.)};
@@ -39,7 +81,6 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
         vst1q_f32(c+i+12, vc[3]);
     }
 }
-
 void gemv_c(float *a, float *b, float *c, int m, int k){
     float val;
     for(int i=0; i<m; i++){
@@ -55,7 +96,7 @@ void gemv_c(float *a, float *b, float *c, int m, int k){
 void gemv_test() {
 
     std::vector<int> rows = {32, 64, 128, 256, 512, 1024,2048}; 
-    std::vector<int> cols = {256, 512, 1024};
+    std::vector<int> cols = {256+16, 512+16, 1024+16};
     for (auto miter = rows.begin(); miter != rows.end(); ++miter) {
         for(auto kiter = cols.begin(); kiter != cols.end(); ++kiter){
             int m = *miter; 
@@ -69,9 +110,9 @@ void gemv_test() {
             posix_memalign(reinterpret_cast<void**>(&dst) , 128, m * sizeof(float));
             posix_memalign(reinterpret_cast<void**>(&ref) , 128, m * sizeof(float));
             for(size_t i=0; i<m*k; i++)
-                srca[i] = i % 16 / 16.0 - 0.5;
+                srca[i] = 1;//i % 16 / 16.0 - 0.5;
             for(size_t i=0; i<k; i++)
-                srcb[i] = i%2 ;//rand() % 32 / 32.0 - 0.5;
+                srcb[i] = 1 ;//rand() % 32 / 32.0 - 0.5;
             gemv_c(srca, srcb, ref, m, k);
             auto start = std::chrono::high_resolution_clock::now();
             for(int loop=0; loop<loop_cnt; loop++)
