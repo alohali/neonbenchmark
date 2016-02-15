@@ -11,8 +11,7 @@
 
 void gemv_neon(float *a, float *b, float *c, int m, int k){
 
-    float32x4_t vb;
-    for(int i=0; i<m; i+=4){
+    for(int i=0; i<m; i+=16){
 /*
     __asm__ __volatile__ (
       :
@@ -20,13 +19,24 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
       :"cc","r0","r1","r2","r3","q0","q1","q2","q3"
     );
     */
-        float32x4_t vc = vdupq_n_f32(0.);
+        float32x4_t vb;
+        float32x4_t va[4];
+        float32x4_t vc[4] = {vdupq_n_f32(0.), vdupq_n_f32(0.),vdupq_n_f32(0.),vdupq_n_f32(0.)};
         for(int j=0; j<k; j++){
             vb = vdupq_n_f32(b[j]);
-            float32x4_t va = vld1q_f32(a + i + j * m);
-            vc = vmlaq_f32(vc, va, vb);
+            va[0]  = vld1q_f32(a + i + j * m);
+            va[1]  = vld1q_f32(a + i + 4 + j * m);
+            va[2]  = vld1q_f32(a + i + 8 + j * m);
+            va[3]  = vld1q_f32(a + i + 12+ j * m);
+            vc[0] = vmlaq_f32(vc[0], va[0], vb);
+            vc[1] = vmlaq_f32(vc[1], va[1], vb);
+            vc[2] = vmlaq_f32(vc[2], va[2], vb);
+            vc[3] = vmlaq_f32(vc[3], va[3], vb);
         }
-        vst1q_f32(c+i, vc);
+        vst1q_f32(c+i,    vc[0]);
+        vst1q_f32(c+i+4,  vc[1]);
+        vst1q_f32(c+i+8,  vc[2]);
+        vst1q_f32(c+i+12, vc[3]);
     }
 }
 
