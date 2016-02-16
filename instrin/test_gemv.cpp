@@ -24,16 +24,21 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
         ".align  8                          \n"
         "0:                                 \n"
         "vld1.f32    d0,      [%1]!         \n"
+        "pld         [%0, #64]         \n"
         "vld1.f32    {d2-d3},  [%0]!         \n"
         "vld1.f32    {d4-d5},  [%0]!         \n"
         "vld1.f32    {d6-d7},  [%0]!        \n"
         "vld1.f32    {d8-d9},  [%0], %7      \n"
+        "pld         [%0, #64]         \n"
         "vld1.f32    {d10-d11},[%0]!         \n"
         "vld1.f32    {d12-d13},[%0]!         \n"
         "vld1.f32    {d14-d15},[%0]!         \n"
         "vld1.f32    {d16-d17},  [%0], %7         \n"
+        "pld         [%0]         \n"
+        "pld         [%0, %8]         \n"
 
         "vmla.f32    q9,  q1, d0[0]    \n"
+        "pld         [%0]         \n"
         "vmla.f32    q10, q2, d0[0]    \n"
         "vmla.f32    q11, q3, d0[0]    \n"
         "vmla.f32    q12, q4, d0[0]    \n"
@@ -56,7 +61,8 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
          "1"(bt),
          "2"(ct),
          "r"(k),
-         "r"(m*4-48)   // %8
+         "r"(m*4-48),   // %7
+         "r"(m*4)   // %8
         : "cc", "memory", "r0","r1", "q0", "q1", "q2", "q3", "q4", "q5","q6", "q7", "q8", "q9", "q10", "q11","q12"
       );
     }
@@ -99,13 +105,13 @@ void gemv_c(float *a, float *b, float *c, int m, int k){
 
 void gemv_test() {
 
-    std::vector<int> rows = {64, 128, 256, 512, 1024,2048}; 
-    std::vector<int> cols = {256+16, 512+16, 1024+16};
+    std::vector<int> rows = {64+16, 128+16, 256+16, 512+16, 1024+16,2048+16}; 
+    std::vector<int> cols = {256, 512, 1024};
     for (auto miter = rows.begin(); miter != rows.end(); ++miter) {
         for(auto kiter = cols.begin(); kiter != cols.end(); ++kiter){
             int m = *miter; 
             int k = *kiter;
-            int loop_cnt = 8192/(m/32)/(k/256);
+            int loop_cnt = 8192/(m/16)/(k/256);
             size_t read_size = (m * k + m +k)/1024 * sizeof(float) * loop_cnt;
   
             float *srca, *srcb, *dst, *ref;
@@ -130,7 +136,7 @@ void gemv_test() {
                 }
             }
             float GB_per_second = float( read_size)  / (diff.count()) ;
-            std::cout << "m= " << m << ",k= "<< k <<",time: "<<diff.count() /1000.0<<"ms,  BW:"<<GB_per_second<<std::endl;
+            std::cout <<"loop_cnt="<<loop_cnt<< ",m= " << m << ",k= "<< k <<",time: "<<diff.count() /1000.0<<"ms,  BW:"<<GB_per_second<<std::endl;
              
             free(srca);
             free(srcb);
