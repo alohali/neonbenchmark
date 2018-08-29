@@ -160,7 +160,7 @@ void benchmark_memory_copy_intrin_bw(size_t mhz_freq) {
       }
       size_t copy_num = 1024 * 1024 * 512;
       auto start = std::chrono::high_resolution_clock::now();
-      copy_intrin(reinterpret_cast<void*>(p2), reinterpret_cast<void*>(p1), local_buffer_size, local_stride, copy_num / (local_buffer_size / local_stride));
+      //copy_intrin(reinterpret_cast<void*>(p2), reinterpret_cast<void*>(p1), local_buffer_size, local_stride, copy_num / (local_buffer_size / local_stride));
       auto end = std::chrono::high_resolution_clock::now();
       auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
       float byte_per_cycle = 1.0 * local_stride * copy_num / (1.0 * diff.count() * mhz_freq);
@@ -203,15 +203,16 @@ void benchmark_memory_add_inplace(size_t mhz_freq) {
 int main(int argc, char* argv[]) {
 
   size_t mhz_freq = 1843;//atoi(argv[1]);
-// printf("load:\n");
+//  printf("load:\n");
 //  benchmark_memory_ldr_bw(mhz_freq);
-  benchmark_inst_bw(mhz_freq);
-// printf("store:\n");
-//  benchmark_memory_str_bw(mhz_freq);
-//printf("copy:\n");
-//  benchmark_memory_copy_bw(mhz_freq);
+//  printf("inst:\n");
+//  benchmark_inst_bw(mhz_freq);
+printf("store:\n");
+  benchmark_memory_str_bw(mhz_freq);
+printf("copy:\n");
+  benchmark_memory_copy_bw(mhz_freq);
 //printf("latency:\n");
- // benchmark_memory_latency(mhz_freq);
+//  benchmark_memory_latency(mhz_freq);
   //benchmark_memory_copy_intrin_bw(mhz_freq);
   //benchmark_memory_add_inplace(mhz_freq);
   return 0;
