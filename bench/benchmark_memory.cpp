@@ -1,4 +1,5 @@
 #include "common.h"
+#include <cstring>
 
 
 void benchmark_memory_latency(size_t mhz_freq) {
@@ -123,17 +124,25 @@ void benchmark_memory_copy_bw(size_t mhz_freq) {
       posix_memalign(reinterpret_cast<void**>(&p1), 64, local_buffer_size);
       posix_memalign(reinterpret_cast<void**>(&p2), 64, local_buffer_size);
       for (size_t i = 0; i < local_buffer_size / sizeof(size_t); ++i) {
-        p1[i] = i;
-        p2[i] = i;
+        p1[i] = rand() % 256;
+        p2[i] = 0;
       }
       size_t copy_num = 1024 * 1024 * 512;
       auto start = std::chrono::high_resolution_clock::now();
-      copy_bw(reinterpret_cast<void*>(p2), reinterpret_cast<void*>(p1), local_buffer_size, local_stride, copy_num / (local_buffer_size / local_stride));
+      for(volatile int i=0; i<copy_num  / local_buffer_size * local_stride; i++)
+          memcpy(p2, p1, local_buffer_size);
+      //copy_bw(reinterpret_cast<void*>(p2), reinterpret_cast<void*>(p1), local_buffer_size, local_stride, copy_num / (local_buffer_size / local_stride));
       auto end = std::chrono::high_resolution_clock::now();
       auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
       float byte_per_cycle = 1.0 * local_stride * copy_num / (1.0 * diff.count() * mhz_freq);
       float gb_per_second = 1.0 * byte_per_cycle * mhz_freq / 1000.0;
       std::cerr << "buffer = " << 1.0 * local_buffer_size / 1024.0 << "KB; "<<  byte_per_cycle << " Byte/cycle; " << gb_per_second << "GB/s";
+      for(size_t i=0; i<local_buffer_size / sizeof(size_t); i++){
+          if(p1[i]!=p2[i]){
+              std::cerr<<"[ERR]copy, i= "<<i<<"s="<<p1[i]<<",d="<<p2[i]<<std::endl;
+              break;
+          }
+      }
       free(p1);
       free(p2);
     }
@@ -141,40 +150,9 @@ void benchmark_memory_copy_bw(size_t mhz_freq) {
   }
 }
 
-void benchmark_memory_copy_intrin_bw(size_t mhz_freq) {
-
-  std::vector<size_t> buffer_size = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768}; // unit is kb
-  std::vector<size_t> stride = {16}; // unit is b
-
-  for (auto iter_buffer_size = buffer_size.begin(); iter_buffer_size != buffer_size.end(); ++iter_buffer_size) {
-    for (auto iter_stride = stride.begin(); iter_stride != stride.end(); ++iter_stride) {
-      size_t local_buffer_size = (*iter_buffer_size) * 1024;
-      size_t local_stride = *iter_stride;
-      size_t *p1;
-      size_t *p2;
-      posix_memalign(reinterpret_cast<void**>(&p1), 64, local_buffer_size);
-      posix_memalign(reinterpret_cast<void**>(&p2), 64, local_buffer_size);
-      for (size_t i = 0; i < local_buffer_size / sizeof(size_t); ++i) {
-        p1[i] = i;
-        p2[i] = i;
-      }
-      size_t copy_num = 1024 * 1024 * 512;
-      auto start = std::chrono::high_resolution_clock::now();
-      //copy_intrin(reinterpret_cast<void*>(p2), reinterpret_cast<void*>(p1), local_buffer_size, local_stride, copy_num / (local_buffer_size / local_stride));
-      auto end = std::chrono::high_resolution_clock::now();
-      auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-      float byte_per_cycle = 1.0 * local_stride * copy_num / (1.0 * diff.count() * mhz_freq);
-      float gb_per_second = 1.0 * byte_per_cycle * mhz_freq / 1000.0;
-      std::cerr << "buffer = " << 1.0 * local_buffer_size / 1024.0 << "KB; "<<  byte_per_cycle << " Byte/cycle; " << gb_per_second << "GB/s";
-      free(p1);
-      free(p2);
-    }
-    std::cerr << std::endl;
-  }
-}
 void benchmark_memory_add_inplace(size_t mhz_freq) {
 
-  std::vector<size_t> buffer_size = {4096, 8192, 16384, 32768}; // unit is kb
+  std::vector<size_t> buffer_size = {4, 8, 16, 32,64, 128, 256,1024,2048,4096,8196,16384}; // unit is kb
   std::vector<size_t> stride = {16}; // unit is b
 
   for (auto iter_buffer_size = buffer_size.begin(); iter_buffer_size != buffer_size.end(); ++iter_buffer_size) {
@@ -193,7 +171,7 @@ void benchmark_memory_add_inplace(size_t mhz_freq) {
       auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
       float byte_per_cycle = 1.0 * local_stride * inst_num / (1.0 * diff.count() * mhz_freq);
       float gb_per_second = 1.0 * byte_per_cycle * mhz_freq / 1000.0;
-      std::cerr << "buffer = " << 1.0 * local_buffer_size / 1024.0 << "KB; "<<  byte_per_cycle << " Byte/cycle; " << gb_per_second << "GB/s";
+      std::cerr << "buffer = " << 1.0 * local_buffer_size / 1024.0 << "KB; "<< diff.count()/1000.0 <<" ms,"<< byte_per_cycle << " Byte/cycle; " << gb_per_second << "GB/s";
       free(p);
     }
     std::cerr << std::endl;
@@ -206,15 +184,15 @@ int main(int argc, char* argv[]) {
 //  printf("load:\n");
 //  benchmark_memory_ldr_bw(mhz_freq);
 //  printf("inst:\n");
-//  benchmark_inst_bw(mhz_freq);
-printf("store:\n");
-  benchmark_memory_str_bw(mhz_freq);
-printf("copy:\n");
-  benchmark_memory_copy_bw(mhz_freq);
+  benchmark_inst_bw(mhz_freq);
+//printf("store:\n");
+//  benchmark_memory_str_bw(mhz_freq);
+//printf("copy:\n");
+//  benchmark_memory_copy_bw(mhz_freq);
 //printf("latency:\n");
 //  benchmark_memory_latency(mhz_freq);
   //benchmark_memory_copy_intrin_bw(mhz_freq);
-  //benchmark_memory_add_inplace(mhz_freq);
+//  benchmark_memory_add_inplace(mhz_freq);
   return 0;
 }
 

@@ -104,20 +104,28 @@ void inst_bw(void *p, size_t length,  size_t loop) {
       "fabs v6.4s, v6.4s\n"
       "fabs v7.4s, v7.4s\n"
 #else
-      "vabs.f32 q0,q0\n"
-      "vabs.f32 q1,q1\n"
-      "vabs.f32 q2,q2\n"
-      "vabs.f32 q3,q3\n"
-      "vabs.f32 q5,q5\n"
-      "vabs.f32 q6,q6\n"
-      "vabs.f32 q7,q7\n"
-      "vabs.f32 q8,q8\n"
+      "vmla.f32 d0,d0,d0\n"
+      "vmla.f32 d1,d1,d1\n"
+      "vmla.f32 d2,d2,d2\n"
+      "vmla.f32 d3,d3,d3\n"
+      "vmla.f32 d4,d4,d4\n"
+      "vmla.f32 d5,d5,d5\n"
+      "vmla.f32 d6,d6,d6\n"
+      "vmla.f32 d7,d7,d7\n"
+      "vmla.f32 d8,d8,d8\n"
+      "vmla.f32 d9,d9,d9\n"
+      "vmla.f32 d10,d10,d10\n"
+      "vmla.f32 d11,d11,d11\n"
+      "vmla.f32 d12,d12,d12\n"
+      "vmla.f32 d13,d13,d13\n"
+      "vmla.f32 d14,d14,d14\n"
+      "vmla.f32 d15,d15,d15\n"
 #endif
       ".endr\n"
       "subs %1, %1, #1\n"
       "bne 1b\n"
       :
-      :"r"(temp_p),"r"(iteration / 32)
+      :"r"(temp_p),"r"(iteration / 64)
       :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15"
 
       );
@@ -174,13 +182,21 @@ void copy_bw(void *dst, void *src, size_t length, size_t stride, size_t loop) {
       "1:\n"
 
 #ifdef __aarch64__
+      "ld1 {v0.4s}, [%1], %3   \n"
+      "ld1 {v1.4s}, [%1], %3   \n"
       "ld1 {v2.4s}, [%1], %3   \n"
       "ld1 {v3.4s}, [%1], %3   \n"
       "st1 {v0.4s}, [%0], %3   \n"
       "st1 {v1.4s}, [%0], %3   \n"
+      "st1 {v2.4s}, [%0], %3   \n"
+      "st1 {v3.4s}, [%0], %3   \n"
 #else
       "vld1.f32 {d0-d1}, [%1], %3\n"
       "vld1.f32 {d2-d3}, [%1], %3\n"
+      "vld1.f32 {d4-d5}, [%1], %3\n"
+      "vld1.f32 {d6-d7}, [%1], %3\n"
+      "vst1.f32 {d0-d1}, [%0], %3\n"
+      "vst1.f32 {d2-d3}, [%0], %3\n"
       "vst1.f32 {d4-d5}, [%0], %3\n"
       "vst1.f32 {d6-d7}, [%0], %3\n"
 
@@ -188,8 +204,8 @@ void copy_bw(void *dst, void *src, size_t length, size_t stride, size_t loop) {
       "subs %2, %2, #1\n"
       "bne 1b\n"
       :
-      :"r"(dst),"r"(src),"r"(iteration / 2), "r"(stride)
-      :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15"
+      :"r"(dst),"r"(src),"r"(iteration / 4), "r"(stride)
+      :"cc","r0","r1","r2","r3","q0","q1","q2","q3"
   
     );
   }
@@ -199,16 +215,12 @@ void add_in_place_bw(void *p, size_t length, size_t stride, size_t loop) {
   size_t iteration = length / stride;
   assert((iteration % 8) == 0);
   for (size_t l = 0; l < loop; ++l) { 
-#ifdef __aarch64__
-
-#else
     __asm__ __volatile__ (
 
       "mov r0, %0\n"
       "mov r1, %0\n"
       ".align 2\n"
       "1:\n"
-      "ldr r0, [%0]\n"
       "vld1.f32 {d0-d1}, [r0], %2\n"
       "vld1.f32 {d2-d3}, [r0], %2\n"
       "vadd.f32 q0, q0, q15\n"
@@ -239,6 +251,5 @@ void add_in_place_bw(void *p, size_t length, size_t stride, size_t loop) {
       :"r"(p),"r"(iteration / 8), "r"(stride)
       :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15" 
     );
-#endif   
   }
 }
