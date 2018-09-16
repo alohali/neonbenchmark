@@ -215,8 +215,9 @@ void add_in_place_bw(void *p, size_t length, size_t stride, size_t loop) {
   size_t iteration = length / stride;
   assert((iteration % 8) == 0);
   for (size_t l = 0; l < loop; ++l) { 
+#ifdef __aarch64__
+#else
     __asm__ __volatile__ (
-
       "mov r0, %0\n"
       "mov r1, %0\n"
       ".align 2\n"
@@ -251,5 +252,6 @@ void add_in_place_bw(void *p, size_t length, size_t stride, size_t loop) {
       :"r"(p),"r"(iteration / 8), "r"(stride)
       :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15" 
     );
+#endif
   }
 }

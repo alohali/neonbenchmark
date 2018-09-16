@@ -5,8 +5,8 @@
 void benchmark_memory_latency(size_t mhz_freq) {
 
   std::vector<size_t> buffer_size = {8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192}; // unit is kb
-  std::vector<size_t> stride = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608}; // unit is b
-  //std::vector<size_t> stride = {64}; // unit is b
+  //std::vector<size_t> stride = {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608}; // unit is b
+  std::vector<size_t> stride = {64}; // unit is b
 
   for (auto iter_buffer_size = buffer_size.begin(); iter_buffer_size != buffer_size.end(); ++iter_buffer_size) {
     for (auto iter_stride = stride.begin(); iter_stride != stride.end(); ++iter_stride) {
@@ -17,7 +17,7 @@ void benchmark_memory_latency(size_t mhz_freq) {
         posix_memalign(reinterpret_cast<void**>(&p), 64, local_buffer_size);
         build_pointer_chain(reinterpret_cast<void*>(p), local_stride, local_buffer_size);
         auto start = std::chrono::high_resolution_clock::now();
-        size_t inst_num = 256 * 1024 * 64;
+        size_t inst_num = 256 * 1024 * 1024;
         ldr_to_use_pattern(reinterpret_cast<void*>(p), inst_num);
         auto end = std::chrono::high_resolution_clock::now();
         auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -184,14 +184,14 @@ int main(int argc, char* argv[]) {
 //  printf("load:\n");
 //  benchmark_memory_ldr_bw(mhz_freq);
 //  printf("inst:\n");
-  benchmark_inst_bw(mhz_freq);
+//  benchmark_inst_bw(mhz_freq);
 //printf("store:\n");
 //  benchmark_memory_str_bw(mhz_freq);
 //printf("copy:\n");
-//  benchmark_memory_copy_bw(mhz_freq);
+//    benchmark_memory_copy_bw(mhz_freq);
 //printf("latency:\n");
-//  benchmark_memory_latency(mhz_freq);
-  //benchmark_memory_copy_intrin_bw(mhz_freq);
+  benchmark_memory_latency(mhz_freq);
+    //benchmark_memory_copy_intrin_bw(mhz_freq);
 //  benchmark_memory_add_inplace(mhz_freq);
   return 0;
 }
