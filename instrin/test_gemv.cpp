@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstring>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <chrono>
 #include <cassert>
@@ -11,9 +12,9 @@
 
 void gemv_neon(float *a, float *b, float *c, int m, int k, float *l1buffer){
     float32x4_t vc[4];
-    float32x4_t va[4];
+    float32x4_t va[8];
     int maxbufferk = L1BUFFER_SIZE / 16 / 4;
-    int ktile = k>maxbufferk? maxbufferk:k;
+    const size_t ktile = k>maxbufferk? maxbufferk:k;
     for(int i=0; i<m; i+=16){
         vc[0] = vdupq_n_f32(0.);
         vc[1] = vdupq_n_f32(0.);
@@ -22,24 +23,56 @@ void gemv_neon(float *a, float *b, float *c, int m, int k, float *l1buffer){
         for(int kt=0; kt<k; kt+=ktile){
             float *l1 = l1buffer;
             float32x4_t *tmp = (float32x4_t *)l1;
+#if 0
             for(int prek=0;prek<ktile;prek++){
                 *tmp++ = vld1q_f32(a+i+0 +(prek+kt)*m);
                 *tmp++ = vld1q_f32(a+i+4 +(prek+kt)*m);
                 *tmp++ = vld1q_f32(a+i+8 +(prek+kt)*m);
                 *tmp++ = vld1q_f32(a+i+12+(prek+kt)*m);
             }
+#endif
+    size_t loop = ktile;
+    float *tmpl1 = l1buffer;
+        __asm__ __volatile__ (
+          ".align 2\n"
+          "1:\n"
+    #ifdef __aarch64__
+          "ld1 {v0.4s}, [%1], #16   \n"
+          "ld1 {v1.4s}, [%1], #16  \n"
+          "ld1 {v2.4s}, [%1], #16   \n"
+          "ld1 {v3.4s}, [%1], %3   \n"
+          "st1 {v0.4s}, [%0] ,#16   \n"
+          "st1 {v1.4s}, [%0] ,#16   \n"
+          "st1 {v2.4s}, [%0] ,#16   \n"
+          "st1 {v3.4s}, [%0] ,#16   \n"
+    #else
+    #endif  
+          "subs %2, %2, #1\n"
+          "bne 1b\n"
+          :
+          :"r"(a), "r"(tmpl1),"r"(128), "r"(m*4-48)
+          :"cc","r0","r1","r2","r3","q0","q1","q2","q3"
+      
+        );
+        
             for(int j=0; j<ktile; j+=2){
                 float32x2_t vb = vld1_f32(b+j+kt);
-                for(int ji=0; ji<2; ji++){
-                    va[0] = vld1q_f32(l1);l1+=4;
-                    va[1] = vld1q_f32(l1);l1+=4;
-                    va[2] = vld1q_f32(l1);l1+=4;
-                    va[3] = vld1q_f32(l1);l1+=4;
-                    vc[0] = vfmaq_lane_f32(vc[0], va[0], vb,ji);
-                    vc[1] = vfmaq_lane_f32(vc[1], va[1], vb,ji);
-                    vc[2] = vfmaq_lane_f32(vc[2], va[2], vb,ji);
-                    vc[3] = vfmaq_lane_f32(vc[3], va[3], vb,ji);
-                }
+                va[0] = vld1q_f32(l1);l1+=4;
+                va[1] = vld1q_f32(l1);l1+=4;
+                va[2] = vld1q_f32(l1);l1+=4;
+                va[3] = vld1q_f32(l1);l1+=4;
+                va[4] = vld1q_f32(l1);l1+=4;
+                va[5] = vld1q_f32(l1);l1+=4;
+                va[6] = vld1q_f32(l1);l1+=4;
+                va[7] = vld1q_f32(l1);l1+=4;
+                vc[0] = vfmaq_lane_f32(vc[0], va[0], vb,0);
+                vc[1] = vfmaq_lane_f32(vc[1], va[1], vb,0);
+                vc[2] = vfmaq_lane_f32(vc[2], va[2], vb,0);
+                vc[3] = vfmaq_lane_f32(vc[3], va[3], vb,0);
+                vc[0] = vfmaq_lane_f32(vc[0], va[4], vb,1);
+                vc[1] = vfmaq_lane_f32(vc[1], va[5], vb,1);
+                vc[2] = vfmaq_lane_f32(vc[2], va[6], vb,1);
+                vc[3] = vfmaq_lane_f32(vc[3], va[7], vb,1);
             }
         }
         vst1q_f32(c+i+0 , vc[0]);
@@ -92,14 +125,14 @@ void gemv_test() {
                 gemv_neon(srca, srcb, dst, m, k, l1buffer);
             auto end = std::chrono::high_resolution_clock::now();
             auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            float GB_per_second = float( read_size)  / (diff.count()) ;
+            std::cout << "m= " << m << ",k= "<< k <<",time: "<<diff.count() /1000.0<<"ms,  BW:"<<GB_per_second<<std::endl;
             for(int i=0; i<m; i++){
                 if(std::fabs(dst[i] - ref[i])>0.001 || !std::isfinite(dst[i])){
                     std::cout <<"error:"<<i<<" dst:"<<dst[i]<<" ref:"<<ref[i]<<std::endl;
                     return;
                 }
             }
-            float GB_per_second = float( read_size)  / (diff.count()) ;
-            std::cout << "m= " << m << ",k= "<< k <<",time: "<<diff.count() /1000.0<<"ms,  BW:"<<GB_per_second<<std::endl;
              
             free(srca);
             free(srcb);
