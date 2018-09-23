@@ -9,7 +9,6 @@
 #include <cassert>
 #include <cmath>
 #define L1BUFFER_SIZE 8192
-
 void gemv_neon(float *a, float *b, float *c, int m, int k, float *l1buffer){
     float32x4_t vc[4];
     float32x4_t va[8];
@@ -31,12 +30,9 @@ void gemv_neon(float *a, float *b, float *c, int m, int k, float *l1buffer){
                 *tmp++ = vld1q_f32(a+i+12+(prek+kt)*m);
             }
 #endif
-    size_t loop = ktile;
-    float *tmpl1 = l1buffer;
-        __asm__ __volatile__ (
+         __asm__ __volatile__ (
           ".align 2\n"
           "1:\n"
-    #ifdef __aarch64__
           "ld1 {v0.4s}, [%1], #16   \n"
           "ld1 {v1.4s}, [%1], #16  \n"
           "ld1 {v2.4s}, [%1], #16   \n"
@@ -45,13 +41,11 @@ void gemv_neon(float *a, float *b, float *c, int m, int k, float *l1buffer){
           "st1 {v1.4s}, [%0] ,#16   \n"
           "st1 {v2.4s}, [%0] ,#16   \n"
           "st1 {v3.4s}, [%0] ,#16   \n"
-    #else
-    #endif  
           "subs %2, %2, #1\n"
           "bne 1b\n"
           :
-          :"r"(a), "r"(tmpl1),"r"(128), "r"(m*4-48)
-          :"cc","r0","r1","r2","r3","q0","q1","q2","q3"
+          :"r"(l1), "r"(a + i + kt * m),"r"(ktile), "r"(m*4-48)
+          :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4"
       
         );
         
@@ -104,7 +98,7 @@ void gemv_test() {
         for(auto kiter = cols.begin(); kiter != cols.end(); ++kiter){
             int m = *miter; 
             int k = *kiter;
-            int loop_cnt = 8192*32/(m/32)/(k/256);
+            int loop_cnt = 8192*8/(m/32)/(k/256);
             size_t read_size = (m * k + m +k)/1024 * sizeof(float) * loop_cnt;
   
             float *srca, *srcb, *dst, *ref;
