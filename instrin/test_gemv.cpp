@@ -114,7 +114,7 @@ void gemv_test() {
         for(auto kiter = cols.begin(); kiter != cols.end(); ++kiter){
             int m = *miter; 
             int k = *kiter;
-            int loop_cnt = 8192*2/(m/16)/(k/256);
+            int loop_cnt = 100;
             float read_size = (float)(m * k + m +k)/1024.0 * sizeof(float) * loop_cnt;
   
             float *srca, *srcb, *dst, *ref;
