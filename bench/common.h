@@ -1,4 +1,5 @@
 #include <iostream>
+#include <arm_neon.h>
 #include <vector>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include <cassert>
 
 
+#define L1BUFFER_SIZE 8192
 void build_pointer_chain(void *p, size_t stride, size_t length) {
   
   size_t num = length / stride;
@@ -42,6 +44,70 @@ void ldr_to_use_pattern(void *p, size_t loop) {
   );
 }
 
+void gemv_neon(float *a, float *b, float *c, int m, int k, float *l1buffer){
+    float32x4_t vc[4];
+    float32x4_t va[4];
+    int maxbufferk = L1BUFFER_SIZE / 16 / 4;
+    int ktile = k>maxbufferk? maxbufferk:k;
+    for(int i=0; i<m; i+=16){
+        vc[0] = vdupq_n_f32(0.);
+        vc[1] = vdupq_n_f32(0.);
+        vc[2] = vdupq_n_f32(0.);
+        vc[3] = vdupq_n_f32(0.);
+        for(int kt=0; kt<k; kt+=ktile){
+            float *l1 = l1buffer;
+            float32x4_t *tmp = (float32x4_t *)l1;
+#if 0
+            for(int prek=0;prek<ktile;prek++){
+                *tmp++ = vld1q_f32(a+i+0 +(prek+kt)*m);
+                *tmp++ = vld1q_f32(a+i+4 +(prek+kt)*m);
+                *tmp++ = vld1q_f32(a+i+8 +(prek+kt)*m);
+                *tmp++ = vld1q_f32(a+i+12+(prek+kt)*m);
+            }
+#endif
+        __asm__ __volatile__ (
+    
+          ".align 2\n"
+          "1:\n"
+    #ifdef __aarch64__
+          "ld1 {v0.4s}, [%1], #16   \n"
+          "ld1 {v1.4s}, [%1], #16  \n"
+          "ld1 {v2.4s}, [%1], #16   \n"
+          "ld1 {v3.4s}, [%1], %3   \n"
+          "st1 {v0.4s}, [%0] ,#16   \n"
+          "st1 {v1.4s}, [%0] ,#16   \n"
+          "st1 {v2.4s}, [%0] ,#16   \n"
+          "st1 {v3.4s}, [%0] ,#16   \n"
+    #else
+    #endif  
+          "subs %2, %2, #1\n"
+          "bne 1b\n"
+          :
+          :"r"(tmp), "r"(a+i+kt*m),"r"(ktile), "r"(m-12)
+          :"cc","r0","r1","r2","r3","q0","q1","q2","q3"
+      
+        );
+        
+            for(int j=0; j<ktile; j+=2){
+                float32x2_t vb = vld1_f32(b+j+kt);
+                for(int ji=0; ji<2; ji++){
+                    va[0] = vld1q_f32(l1);l1+=4;
+                    va[1] = vld1q_f32(l1);l1+=4;
+                    va[2] = vld1q_f32(l1);l1+=4;
+                    va[3] = vld1q_f32(l1);l1+=4;
+                    vc[0] = vfmaq_lane_f32(vc[0], va[0], vb,0);
+                    vc[1] = vfmaq_lane_f32(vc[1], va[1], vb,0);
+                    vc[2] = vfmaq_lane_f32(vc[2], va[2], vb,0);
+                    vc[3] = vfmaq_lane_f32(vc[3], va[3], vb,0);
+                }
+            }
+        }
+        vst1q_f32(c+i+0 , vc[0]);
+        vst1q_f32(c+i+4 , vc[1]);
+        vst1q_f32(c+i+8 , vc[2]);
+        vst1q_f32(c+i+12, vc[3]);
+    }
+}
 void ldr_bw(void *p, size_t length, size_t stride, size_t loop) {
   size_t iteration = length / stride;
   assert((iteration % 32) == 0);
@@ -215,8 +281,9 @@ void add_in_place_bw(void *p, size_t length, size_t stride, size_t loop) {
   size_t iteration = length / stride;
   assert((iteration % 8) == 0);
   for (size_t l = 0; l < loop; ++l) { 
+#ifdef __aarch64__
+#else
     __asm__ __volatile__ (
-
       "mov r0, %0\n"
       "mov r1, %0\n"
       ".align 2\n"
@@ -251,5 +318,6 @@ void add_in_place_bw(void *p, size_t length, size_t stride, size_t loop) {
       :"r"(p),"r"(iteration / 8), "r"(stride)
       :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15" 
     );
+#endif
   }
 }
