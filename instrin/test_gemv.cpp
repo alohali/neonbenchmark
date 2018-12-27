@@ -34,14 +34,15 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
         "vld1.f32    {d12-d13},[%0]!         \n"
         "vld1.f32    {d14-d15},[%0]!         \n"
         "vld1.f32    {d16-d17},  [%0], %7         \n"
-        "pld         [%0]         \n"
-        "pld         [%0, %8]         \n"
 
         "vmla.f32    q9,  q1, d0[0]    \n"
         "pld         [%0]         \n"
         "vmla.f32    q10, q2, d0[0]    \n"
+        "pld         [%0, %8]         \n"
         "vmla.f32    q11, q3, d0[0]    \n"
+        "pld         [%0, %9]         \n"
         "vmla.f32    q12, q4, d0[0]    \n"
+        "pld         [%0, %10]         \n"
         "vmla.f32    q9,  q5, d0[1]    \n"
         "vmla.f32    q10, q6, d0[1]    \n"
         "subs        r1, #2             \n"
@@ -62,7 +63,9 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
          "2"(ct),
          "r"(k),
          "r"(m*4-48),   // %7
-         "r"(m*4)   // %8
+         "r"(m*4),   // %8
+         "r"(m*8),   // %9
+         "r"(m*12)   // %9
         : "cc", "memory", "r0","r1", "q0", "q1", "q2", "q3", "q4", "q5","q6", "q7", "q8", "q9", "q10", "q11","q12"
       );
     }
@@ -106,13 +109,13 @@ void gemv_c(float *a, float *b, float *c, int m, int k){
 void gemv_test() {
 
     std::vector<int> rows = {64+16, 128+16, 256+16, 512+16, 1024+16,2048+16}; 
-    std::vector<int> cols = {256, 512, 1024};
+    std::vector<int> cols = {256+16, 512+16, 1024+16};
     for (auto miter = rows.begin(); miter != rows.end(); ++miter) {
         for(auto kiter = cols.begin(); kiter != cols.end(); ++kiter){
             int m = *miter; 
             int k = *kiter;
-            int loop_cnt = 8192/(m/16)/(k/256);
-            size_t read_size = (m * k + m +k)/1024 * sizeof(float) * loop_cnt;
+            int loop_cnt = 8192*2/(m/16)/(k/256);
+            float read_size = (float)(m * k + m +k)/1024.0 * sizeof(float) * loop_cnt;
   
             float *srca, *srcb, *dst, *ref;
             posix_memalign(reinterpret_cast<void**>(&srca), 128, m * k * sizeof(float));
