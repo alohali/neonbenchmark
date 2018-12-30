@@ -7,46 +7,6 @@
 #include <chrono>
 #include <cassert>
 #include <cmath>
-/*
-         __asm__ __volatile__ (
-          ".align 2\n"
-          "1:\n"
-          "ld1 {v0.4s}, [%1], #16   \n"
-          "ld1 {v1.4s}, [%1], #16  \n"
-          "ld1 {v2.4s}, [%1], #16   \n"
-          "ld1 {v3.4s}, [%1], %3   \n"
-          "st1 {v0.4s}, [%0] ,#16   \n"
-          "st1 {v1.4s}, [%0] ,#16   \n"
-          "st1 {v2.4s}, [%0] ,#16   \n"
-          "st1 {v3.4s}, [%0] ,#16   \n"
-          "subs %2, %2, #1\n"
-          "bne 1b\n"
-          :
-          :"r"(l1), "r"(a + i + kt * m),"r"(ktile), "r"(m*4-48)
-          :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4"
-      
-        );
-        
-            for(int j=0; j<ktile; j+=2){
-                float32x2_t vb = vld1_f32(b+j+kt);
-                va[0] = vld1q_f32(l1);l1+=4;
-                va[1] = vld1q_f32(l1);l1+=4;
-                va[2] = vld1q_f32(l1);l1+=4;
-                va[3] = vld1q_f32(l1);l1+=4;
-                va[4] = vld1q_f32(l1);l1+=4;
-                va[5] = vld1q_f32(l1);l1+=4;
-                va[6] = vld1q_f32(l1);l1+=4;
-                va[7] = vld1q_f32(l1);l1+=4;
-                vc[0] = vfmaq_lane_f32(vc[0], va[0], vb,0);
-                vc[1] = vfmaq_lane_f32(vc[1], va[1], vb,0);
-                vc[2] = vfmaq_lane_f32(vc[2], va[2], vb,0);
-                vc[3] = vfmaq_lane_f32(vc[3], va[3], vb,0);
-                vc[0] = vfmaq_lane_f32(vc[0], va[4], vb,1);
-                vc[1] = vfmaq_lane_f32(vc[1], va[5], vb,1);
-                vc[2] = vfmaq_lane_f32(vc[2], va[6], vb,1);
-                vc[3] = vfmaq_lane_f32(vc[3], va[7], vb,1);
-            }
-*/
 
 void gemv_neon(float *a, float *b, float *c, int m, int k){
 
@@ -55,6 +15,46 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
       float *bt = b;
       float *ct = c + i;
       __asm__ __volatile__ (
+#ifdef __aarch64__
+        "mov     x8, %6                        \n"
+        "eor    v9.8b,  v9.8b,  v9.8b          \n"
+        "eor    v10.8b, v10.8b, v10.8b         \n"
+        "eor    v11.8b, v11.8b, v11.8b         \n"
+        "eor    v12.8b, v12.8b, v12.8b         \n"
+        ".align  8                          \n"
+        "0:                                 \n"
+        "ld1    {v0.2s},   [%1], #8     \n"
+        "prfm pldl1strm, [%0, #64]    \n"
+        "ld1    {v1.4s},  [%0],#16     \n"
+        "ld1    {v2.4s},  [%0],#16     \n"
+        "ld1    {v3.4s},  [%0],#16     \n"
+        "ld1    {v4.4s},  [%0], %7      \n"
+        "prfm pldl1strm, [%0, #64]    \n"
+        "ld1    {v5.4s},  [%0],#16      \n"
+        "ld1    {v6.4s},  [%0],#16      \n"
+        "ld1    {v7.4s},  [%0],#16      \n"
+        "ld1    {v8.4s},  [%0], %7      \n"
+
+        "fmla   v9.4s, v1.4s, v0.2s[0]   \n"
+        "prfm pldl1strm, [%0]            \n"
+        "fmla   v10.4s, v2.4s, v0.2s[0]  \n"
+        "prfm pldl1strm, [%0,%8]         \n"
+        "fmla   v11.4s, v3.4s, v0.2s[0]  \n"
+        "prfm pldl1strm, [%0,%9]         \n"
+        "fmla   v12.4s, v4.4s, v0.2s[0]  \n"
+        "prfm pldl1strm, [%0,%10]        \n"
+        "subs   x8, x8, #2               \n"
+        "fmla   v9.4s , v5.4s, v0.2s[1]  \n"
+        "fmla   v10.4s, v6.4s, v0.2s[1]  \n"
+        "fmla   v11.4s, v7.4s, v0.2s[1]  \n"
+        "fmla   v12.4s, v8.4s, v0.2s[1]  \n"
+        "bne        0b                   \n"
+
+        "st1    {v9.4s},  [%2],#16       \n"
+        "st1    {v10.4s}, [%2],#16       \n"
+        "st1    {v11.4s}, [%2],#16       \n"
+        "st1    {v12.4s}, [%2]           \n"
+#else
         "mov     r1, %6                        \n"
         "veor    q9,  q9,  q9                  \n"
         "veor    q10, q10, q10                 \n"
@@ -93,6 +93,7 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
         "vst1.f32    {d20-d21},  [%2]!      \n"
         "vst1.f32    {d22-d23},  [%2]!      \n"
         "vst1.f32    {d24-d25},  [%2]      \n"
+#endif
 
         :"=r"(at),   // %0
          "=r"(bt),  // %1
@@ -105,7 +106,11 @@ void gemv_neon(float *a, float *b, float *c, int m, int k){
          "r"(m*4),   // %8
          "r"(m*8),   // %9
          "r"(m*12)   // %9
+#ifdef __aarch64__
+        : "cc", "memory", "x8", "v0", "v1", "v2", "v3", "v4", "v5","v6", "v7", "v8", "v9", "v10", "v11","v12"
+#else
         : "cc", "memory", "r0","r1", "q0", "q1", "q2", "q3", "q4", "q5","q6", "q7", "q8", "q9", "q10", "q11","q12"
+#endif
       );
     }
 }
@@ -153,7 +158,7 @@ void gemv_test() {
         for(auto kiter = cols.begin(); kiter != cols.end(); ++kiter){
             int m = *miter; 
             int k = *kiter;
-            int loop_cnt = 100;
+            int loop_cnt = 100 * (2048+16)/m * (1024+16)/k;
             float read_size = (float)(m * k + m +k)/1024.0 * sizeof(float) * loop_cnt;
   
             float *srca, *srcb, *dst, *ref;
