@@ -4,6 +4,7 @@
 /*
 https://software.intel.com/sites/landingpage/IntrinsicsGuide/#expand=4058&techs=SSE,SSE2,SSE3,SSSE3,SSE4_1,SSE4_2
 x86 Assembly Guide: http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
+https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html#x86Operandmodifiers
 
 __m128 x1 = _mm_load_ps(vec1_x);
 __m128 y1 = _mm_load_ps(vec1_y);
@@ -45,280 +46,98 @@ t1 = _mm_add_ps(t1, t2);
 　
 _mm_stream_ps(output, t1);
 */
-/**
- * Copy 16 bytes from one location to another using optimised SSE
- * instructions. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- */
 static inline void
-mov16(uint8_t *dst, const uint8_t *src)
+fast_memcpy(uint8_t *dst, const uint8_t *src, size_t len)
 {
-	asm volatile ("movdqu (%[src]), %%xmm0\n\t"
-		      "movdqu %%xmm0, (%[dst])\n\t"
-		      :
-		      : [src] "r" (src),
-			[dst] "r"(dst)
-		      : "xmm0", "memory");
+    len = 4;
+    size_t zero = 0;
+    asm volatile (
+                    "mov  %%rcx, %[len] \n"
+                    "loop:\n"
+                    ".align 8\n"
+                    "movdqu (%[src]), %%xmm0\n"
+                    "movdqu 16(%[src]), %%xmm1\n"
+                    "movdqu 32(%[src]), %%xmm2\n"
+                    "movdqu 48(%[src]), %%xmm3\n"
+                    "movdqu 64(%[src]), %%xmm4\n"
+                    "movdqu 80(%[src]), %%xmm5\n"
+                    "movdqu 96(%[src]), %%xmm6\n"
+                    "movdqu 112(%[src]), %%xmm7\n"
+                    "movdqu %%xmm0, (%[dst])\n"
+                    "movdqu %%xmm1, 16(%[dst])\n"
+                    "movdqu %%xmm2, 32(%[dst])\n"
+                    "movdqu %%xmm3, 48(%[dst])\n"
+                    "movdqu %%xmm4, 64(%[dst])\n"
+                    "dec %%rcx\n"
+                    "movdqu %%xmm5, 80(%[dst])\n"
+                    "movdqu %%xmm6, 96(%[dst])\n"
+                    "movdqu %%xmm7, 112(%[dst])\n"
+                    "cmp %%rcx, %3\n"
+                    // "call printf\n"
+                    "jne loop\n"
+                    :
+                    : [src] "r" (src),
+                      [dst] "r"(dst),
+                      [len] "r"(len),
+                      "r"(zero)
+                    : "xmm0", "xmm1", "xmm2", "xmm3","xmm4", "xmm5", "xmm6", "xmm7", "memory", "rcx");
 }
 
-/**
- * Copy 32 bytes from one location to another using optimised SSE
- * instructions. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- */
-static inline void
-mov32(uint8_t *dst, const uint8_t *src)
+static void * sse_memcpy(void * to, const void * from, size_t len)
 {
-	asm volatile ("movdqu (%[src]), %%xmm0\n\t"
-		      "movdqu 16(%[src]), %%xmm1\n\t"
-		      "movdqu %%xmm0, (%[dst])\n\t"
-		      "movdqu %%xmm1, 16(%[dst])"
-		      :
-		      : [src] "r" (src),
-			[dst] "r"(dst)
-		      : "xmm0", "xmm1", "memory");
+     void *retval;
+     size_t i;
+     retval = to;
+
+     /* PREFETCH has effect even for MOVSB instruction ;) */
+     __asm__ __volatile__ (
+                          "   prefetchnta (%0)\n"
+                          "   prefetchnta 64(%0)\n"
+                          "   prefetchnta 128(%0)\n"
+                          "   prefetchnta 192(%0)\n"
+                          "   prefetchnta 256(%0)\n"
+                          : : "r" (from) );
+
+                    __asm__ __volatile__ (
+                                         "prefetchnta 320(%0)\n"
+                                         "movups (%0), %%xmm0\n"
+                                         "movups 16(%0), %%xmm1\n"
+                                         "movups 32(%0), %%xmm2\n"
+                                         "movups 48(%0), %%xmm3\n"
+                                         "movntps %%xmm0, (%1)\n"
+                                         "movntps %%xmm1, 16(%1)\n"
+                                         "movntps %%xmm2, 32(%1)\n"
+                                         "movntps %%xmm3, 48(%1)\n"
+                                         :: "r" (from), "r" (to) : "memory");
+
+
+                    __asm__ __volatile__ (
+                                         "prefetchnta 320(%0)\n"
+                                         "movaps (%0), %%xmm0\n"
+                                         "movaps 16(%0), %%xmm1\n"
+                                         "movaps 32(%0), %%xmm2\n"
+                                         "movaps 48(%0), %%xmm3\n"
+                                         "movntps %%xmm0, (%1)\n"
+                                         "movntps %%xmm1, 16(%1)\n"
+                                         "movntps %%xmm2, 32(%1)\n"
+                                         "movntps %%xmm3, 48(%1)\n"
+                                         :: "r" (from), "r" (to) : "memory");
+
+          /* since movntq is weakly-ordered, a "sfence"
+           * is needed to become ordered again. */
+          __asm__ __volatile__ ("sfence":::"memory");
+          /* enables to use FPU */
+          __asm__ __volatile__ ("emms":::"memory");
+     
 }
 
-/**
- * Copy 48 bytes from one location to another using optimised SSE
- * instructions. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- */
 static inline void
-mov48(uint8_t *dst, const uint8_t *src)
+fast_memcpy_intrin(uint8_t *dst, const uint8_t *src, size_t len)
 {
-	asm volatile ("movdqu (%[src]), %%xmm0\n\t"
-		      "movdqu 16(%[src]), %%xmm1\n\t"
-		      "movdqu 32(%[src]), %%xmm2\n\t"
-		      "movdqu %%xmm0, (%[dst])\n\t"
-		      "movdqu %%xmm1, 16(%[dst])"
-		      "movdqu %%xmm2, 32(%[dst])"
-		      :
-		      : [src] "r" (src),
-			[dst] "r"(dst)
-		      : "xmm0", "xmm1", "memory");
-}
+    len = len / 16;
+    for(int i=0; i<len; i++){
 
-/**
- * Copy 64 bytes from one location to another using optimised SSE
- * instructions. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- */
-static inline void
-mov64(uint8_t *dst, const uint8_t *src)
-{
-	asm volatile ("movdqu (%[src]), %%xmm0\n\t"
-		      "movdqu 16(%[src]), %%xmm1\n\t"
-		      "movdqu 32(%[src]), %%xmm2\n\t"
-		      "movdqu 48(%[src]), %%xmm3\n\t"
-		      "movdqu %%xmm0, (%[dst])\n\t"
-		      "movdqu %%xmm1, 16(%[dst])\n\t"
-		      "movdqu %%xmm2, 32(%[dst])\n\t"
-		      "movdqu %%xmm3, 48(%[dst])"
-		      :
-		      : [src] "r" (src),
-			[dst] "r"(dst)
-		      : "xmm0", "xmm1", "xmm2", "xmm3","memory");
-}
-
-/**
- * Copy 128 bytes from one location to another using optimised SSE
- * instructions. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- */
-static inline void
-mov128(uint8_t *dst, const uint8_t *src)
-{
-	asm volatile ("movdqu (%[src]), %%xmm0\n\t"
-		      "movdqu 16(%[src]), %%xmm1\n\t"
-		      "movdqu 32(%[src]), %%xmm2\n\t"
-		      "movdqu 48(%[src]), %%xmm3\n\t"
-		      "movdqu 64(%[src]), %%xmm4\n\t"
-		      "movdqu 80(%[src]), %%xmm5\n\t"
-		      "movdqu 96(%[src]), %%xmm6\n\t"
-		      "movdqu 112(%[src]), %%xmm7\n\t"
-		      "movdqu %%xmm0, (%[dst])\n\t"
-		      "movdqu %%xmm1, 16(%[dst])\n\t"
-		      "movdqu %%xmm2, 32(%[dst])\n\t"
-		      "movdqu %%xmm3, 48(%[dst])\n\t"
-		      "movdqu %%xmm4, 64(%[dst])\n\t"
-		      "movdqu %%xmm5, 80(%[dst])\n\t"
-		      "movdqu %%xmm6, 96(%[dst])\n\t"
-		      "movdqu %%xmm7, 112(%[dst])"
-		      :
-		      : [src] "r" (src),
-			[dst] "r"(dst)
-		      : "xmm0", "xmm1", "xmm2", "xmm3",
-			"xmm4", "xmm5", "xmm6", "xmm7", "memory");
-}
-
-/**
- * Copy 256 bytes from one location to another using optimised SSE
- * instructions. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- */
-static inline void
-mov256(uint8_t *dst, const uint8_t *src)
-{
-	/*
-	 * There are 16XMM registers, but this function does not use
-	 * them all so that it can still be compiled as 32bit
-	 * code. The performance increase was neglible if all 16
-	 * registers were used.
-	 */
-	mov128(dst, src);
-	mov128(dst + 128, src + 128);
-}
-
-
-/**
- * Copy bytes from one location to another. The locations should not overlap.
- *
- * @param s1
- *   Pointer to the destination of the data.
- * @param s2
- *   Pointer to the source data.
- * @param n
- *   Number of bytes to copy.
- * @return
- *   s1
- */
-void *
-fast_memcpy(void *s1, const void *s2, size_t n)
-{
-	uint8_t *dst = (uint8_t *)s1;
-	const uint8_t *src = (const uint8_t *)s2;
-
-	/* We can't copy < 16 bytes using XMM registers so do it manually. */
-	if (n < 16) {
-		if (n & 0x01) {
-			*dst = *src;
-			dst += 1;
-			src += 1;
-		}
-		if (n & 0x02) {
-			*(uint16_t *)dst = *(const uint16_t *)src;
-			dst += 2;
-			src += 2;
-		}
-		if (n & 0x04) {
-			*(uint32_t *)dst = *(const uint32_t *)src;
-			dst += 4;
-			src += 4;
-		}
-		if (n & 0x08) {
-			*(uint64_t *)dst = *(const uint64_t *)src;
-		}
-		return dst;
-	}
-
-	/* Special fast cases for <= 128 bytes */
-	if (n <= 32) {
-		mov16(dst, src);
-		mov16(dst - 16 + n, src - 16 + n);
-		return s1;
-	}
-	if (n <= 64) {
-		mov32(dst, src);
-		mov32(dst - 32 + n, src - 32 + n);
-		return s1;
-	}
-	if (n <= 128) {
-		mov64(dst, src);
-		mov64(dst - 64 + n, src - 64 + n);
-		return s1;
-	}
-
-	/*
-	 * For large copies > 128 bytes. This combination of 256, 64 and 16 byte
-	 * copies was found to be faster than doing 128 and 32 byte copies as
-	 * well.
-	 */
-	for (; n >= 256; n -= 256, dst += 256, src += 256) {
-		mov256(dst, src);
-	}
-
-	/*
-	 * We split the remaining bytes (which will be less than 256) into
-	 * 64byte (2^6) chunks.
-	 * Using incrementing integers in the case labels of a switch statement
-	 * enourages the compiler to use a jump table. To get incrementing
-	 * integers, we shift the 2 relevant bits to the LSB position to first
-	 * get decrementing integers, and then subtract.
-	 */
-	switch (3 - (n >> 6)) {
-	case 0x00:
-		mov64(dst, src);
-		n -= 64;
-		dst += 64;
-		src += 64;       /* fallthrough */
-	case 0x01:
-		mov64(dst, src);
-		n -= 64;
-		dst += 64;
-		src += 64;       /* fallthrough */
-	case 0x02:
-		mov64(dst, src);
-		n -= 64;
-		dst += 64;
-		src += 64;       /* fallthrough */
-	default:
-		;
-	}
-
-	/*
-	 * We split the remaining bytes (which will be less than 64) into
-	 * 16byte (2^4) chunks, using the same switch structure as above.
-	 */
-	switch (3 - (n >> 4)) {
-	case 0x00:
-		mov16(dst, src);
-		n -= 16;
-		dst += 16;
-		src += 16;       /* fallthrough */
-	case 0x01:
-		mov16(dst, src);
-		n -= 16;
-		dst += 16;
-		src += 16;       /* fallthrough */
-	case 0x02:
-		mov16(dst, src);
-		n -= 16;
-		dst += 16;
-		src += 16;       /* fallthrough */
-	default:
-		;
-	}
-
-	/* Copy any remaining bytes, without going beyond end of buffers */
-	if (n != 0) {
-		mov16(dst - 16 + n, src - 16 + n);
-	}
-	return s1;
+    }
 }
 
 uint8_t src[1024] = {0};
@@ -326,11 +145,17 @@ uint8_t dst[1024] = {0};
 
 int main(int argc, char **argv)
 {
-	fast_memcpy(dst, src, 1024);
-	return 0;
+    for(int i=0; i<1024;i++)
+        src[i] = i%128;
+    fast_memcpy(dst, src, 1024);
+    
+    for(int i=0; i<1024;i++)
+    {   
+        if(dst[i]!=src[i]){
+            printf("error %d %d %d\n", i, src[i], dst[i]);
+            return -1;
+        }
+    }
+    printf("done\n");   
+    return 0;
 }
---------------------- 
-作者：功名半纸 
-来源：CSDN 
-原文：https://blog.csdn.net/force_eagle/article/details/7470633 
-版权声明：本文为博主原创文章，转载请附上博文链接！
