@@ -13,8 +13,8 @@ extern "C"
 
 using namespace std;  
 int main() {  
-    const int M=2048+16;  
-    const int N=1024+16;  
+    const int M=4096+16;  
+    const int N=4096+16;  
     const float alpha=1;  
     const float beta=0;  
     float *A;  
@@ -24,7 +24,7 @@ int main() {
     
         cblas_sgemv(CblasRowMajor, CblasTrans, M, N, alpha, A, N, B, 1, beta, C, 1);  
     auto start = std::chrono::high_resolution_clock::now();
-    for(int i=0;i < 100; i++)
+    for(int i=0;i < 10000; i++)
         cblas_sgemv(CblasRowMajor, CblasTrans, M, N, alpha, A, N, B, 1, beta, C, 1);  
     auto end = std::chrono::high_resolution_clock::now();
     auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
