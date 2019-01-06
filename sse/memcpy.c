@@ -49,38 +49,39 @@ _mm_stream_ps(output, t1);
 static inline void
 fast_memcpy(uint8_t *dst, const uint8_t *src, size_t len)
 {
-    len = 4;
-    size_t zero = 0;
+    len = len / 128;
     asm volatile (
-                    "mov  %%rcx, %[len] \n"
+                    "mov  %[len], %%rcx  \n"
+                    "mov  %[src], %%r8  \n"
+                    "mov  %[dst], %%r9  \n"
                     "loop:\n"
                     ".align 8\n"
-                    "movdqu (%[src]), %%xmm0\n"
-                    "movdqu 16(%[src]), %%xmm1\n"
-                    "movdqu 32(%[src]), %%xmm2\n"
-                    "movdqu 48(%[src]), %%xmm3\n"
-                    "movdqu 64(%[src]), %%xmm4\n"
-                    "movdqu 80(%[src]), %%xmm5\n"
-                    "movdqu 96(%[src]), %%xmm6\n"
-                    "movdqu 112(%[src]), %%xmm7\n"
-                    "movdqu %%xmm0, (%[dst])\n"
-                    "movdqu %%xmm1, 16(%[dst])\n"
-                    "movdqu %%xmm2, 32(%[dst])\n"
-                    "movdqu %%xmm3, 48(%[dst])\n"
-                    "movdqu %%xmm4, 64(%[dst])\n"
+                    "movdqu (%%r8), %%xmm0\n"
+                    "movdqu 16(%%r8), %%xmm1\n"
+                    "movdqu 32(%%r8), %%xmm2\n"
+                    "movdqu 48(%%r8), %%xmm3\n"
+                    "movdqu 64(%%r8), %%xmm4\n"
+                    "movdqu 80(%%r8), %%xmm5\n"
+                    "movdqu 96(%%r8), %%xmm6\n"
+                    "movdqu 112(%%r8), %%xmm7\n"
+                    "add $0x80, %%r8\n"
+                    "movdqu %%xmm0, (%%r9)\n"
+                    "movdqu %%xmm1, 16(%%r9)\n"
+                    "movdqu %%xmm2, 32(%%r9)\n"
+                    "movdqu %%xmm3, 48(%%r9)\n"
+                    "movdqu %%xmm4, 64(%%r9)\n"
                     "dec %%rcx\n"
-                    "movdqu %%xmm5, 80(%[dst])\n"
-                    "movdqu %%xmm6, 96(%[dst])\n"
-                    "movdqu %%xmm7, 112(%[dst])\n"
-                    "cmp %%rcx, %3\n"
-                    // "call printf\n"
+                    "movdqu %%xmm5, 80(%%r9)\n"
+                    "movdqu %%xmm6, 96(%%r9)\n"
+                    "movdqu %%xmm7, 112(%%r9)\n"
+                    "add $0x80, %%r9\n"
+                    "cmp $0,%%rcx\n"
                     "jne loop\n"
                     :
                     : [src] "r" (src),
                       [dst] "r"(dst),
-                      [len] "r"(len),
-                      "r"(zero)
-                    : "xmm0", "xmm1", "xmm2", "xmm3","xmm4", "xmm5", "xmm6", "xmm7", "memory", "rcx");
+                      [len] "r"(len)
+                    : "xmm0", "xmm1", "xmm2", "xmm3","xmm4", "xmm5", "xmm6", "xmm7", "memory", "rcx", "r8", "r9");
 }
 
 static void * sse_memcpy(void * to, const void * from, size_t len)
@@ -131,14 +132,6 @@ static void * sse_memcpy(void * to, const void * from, size_t len)
      
 }
 
-static inline void
-fast_memcpy_intrin(uint8_t *dst, const uint8_t *src, size_t len)
-{
-    len = len / 16;
-    for(int i=0; i<len; i++){
-
-    }
-}
 
 uint8_t src[1024] = {0};
 uint8_t dst[1024] = {0};
@@ -147,6 +140,7 @@ int main(int argc, char **argv)
 {
     for(int i=0; i<1024;i++)
         src[i] = i%128;
+    for(int i=0; i<1024;i++)
     fast_memcpy(dst, src, 1024);
     
     for(int i=0; i<1024;i++)
