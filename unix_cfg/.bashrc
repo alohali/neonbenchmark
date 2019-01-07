@@ -59,22 +59,8 @@ if [ -n "$force_color_prompt" ]; then
     fi
 fi
 
-if [ "$color_prompt" = yes ]; then
-    PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-else
-    PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
-fi
 unset color_prompt force_color_prompt
-
-# If this is an xterm set the title to user@host:dir
-case "$TERM" in
-xterm*|rxvt*)
-    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
-    ;;
-*)
-    ;;
-esac
-
+export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;34m\]\u:\[\033[01;35m\]\w\[\033[00m\]\$ '
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
     test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
@@ -115,8 +101,8 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
-export PATH=/usr/local/bin/:/usr/bin/:$PATH:/usr/local/cuda-8.0/bin/:/home/alohali/movidius/mdk/tools/00.87.3/linux64/bin/
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64/:/usr/local/cudnn-6.0/lib64/:/data/users/alohali/tool/TensorRT-3.0.0/lib:/usr/local/cudnn-7.0/lib64/
+export PATH=/home/alohali/bin/m2/ncsdk/:/usr/local/bin/:/usr/bin/:$PATH:/usr/local/cuda-8.0/bin/:/home/alohali/movidius/mdk/tools/00.87.3/linux64/bin/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64/:/usr/local/cudnn-6.0/lib64/:/data/users/alohali/tool/TensorRT-3.0.0/lib:/usr/local/cudnn-7.0/lib64/:/home/alohali/movidius/rpn-movi/test/release/
 export C_INCLUDE_PATH=$C_INCLUDE_PATH:/usr/local/cuda/include/:/usr/local/cudnn-6.0/include/
 export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/usr/local/cuda/include/:/usr/local/cudnn-6.0/include/
 export CUDNN_PATH=/usr/local/cudnn-6.0/
@@ -138,14 +124,18 @@ alias scp='scp -r'
 alias rm='rm -r'
 alias c='cd'
 alias l='ls'
-alias sudo='sudo '
-export MV_TOOLS_DIR=/home/alohali/movidius/mdk/tools/
-export MDK_ROOT=/home/alohali/movidius/mdk/
-export MVTENSOR_ROOT=/home/alohali/movidius/rpn-movi/apps/MvTensor
+alias sudo='sudo -E LD_LIBRARY_PATH=$LD_LIBRARY_PATH'
+export MV_TOOLS_DIR=/home/alohali/movidius/m2/mdk/tools/
+export MDK_ROOT=/home/alohali/movidius/m2/mdk/
 export MV_SOC_REV=ma2450
-export PYTHONPATH="${PYTHONPATH}:/opt/movidius/caffe/python"
-export CXX=g++-4.8
-export CC=gcc-4.8
 export MDK_PORT=30002
-export PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u:\[\033[01;35m\]\w\[\033[00m\]\$ '
-export LS_COLORS="di=1;32:ex=4;31:*.tar.gz=1;35:"
+#export MV_TOOLS_DIR=/home/alohali/movidius/mx/MX_Reference/tools/
+#export MDK_ROOT=/home/alohali/movidius/mx/MX_Reference/mdk
+#export MV_SOC_REV=ma2480
+export MVTENSOR_ROOT=/home/alohali/movidius/rpn-movi/apps/MvTensor
+#export CXX=g++-4.8
+#export CC=gcc-4.8
+
+export LS_COLORS="di=1;32:ex=4;31:"
+#source ~/.mxrc
+export PYTHONPATH="${PYTHONPATH}:/home/alohali/bin/m2/caffe/python"
