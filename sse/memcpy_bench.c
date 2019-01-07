@@ -56,13 +56,15 @@ int main(int argc, char *argv[]){
 		tuned_STREAM_Copy();
 	gettimeofday(&end, &tz);
 
+	while(1){
+	    gettimeofday(&start, &tz);
 
-	gettimeofday(&start, &tz);
-
-	for(volatile int i=0; i<loopcnt; i++)
+	    for(int i=0; i<loopcnt; i++)
 		fast_memcpy((uint8_t *)dst, (uint8_t *)src, sizeof(src));
-	gettimeofday(&end, &tz);
+	    gettimeofday(&end, &tz);
 
-	float ms = (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_usec - start.tv_usec) / 1000.0;
-	printf("time %.3f ms, size %lu MB, bw %.3f GB/s\n", ms, sizeof(src) * 2 /1024 /1024, sizeof(src) * 2 /1024 /1024/ms * loopcnt );
+	    float ms = (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_usec - start.tv_usec) / 1000.0;
+	    printf("time %.3f ms, size %lu MB, bw %.3f GB/s\n", ms, sizeof(src) * 2 /1024 /1024, sizeof(src) * 2 /1024 /1024/ms * loopcnt );
+	}
 }
+
