@@ -33,23 +33,24 @@ void benchmark_memory_latency(size_t mhz_freq) {
 }
 void benchmark_inst_bw(size_t mhz_freq) {
 
-  std::vector<size_t> buffer_size = {2, 4, 6, 8,12}; // unit is kb
+  std::vector<size_t> buffer_size = {32,32, 64, 6, 8,12}; // unit is kb
 
-  for (auto iter_buffer_size = buffer_size.begin(); iter_buffer_size != buffer_size.end(); ++iter_buffer_size) {
-      size_t local_buffer_size = (*iter_buffer_size) * 1024;
       size_t *p;
-      posix_memalign(reinterpret_cast<void**>(&p), 64, local_buffer_size);
+      posix_memalign(reinterpret_cast<void**>(&p), 64, 16 *1024);
+      memset(p, 1, 16*1024); 
+  for (auto iter_buffer_size = buffer_size.begin(); iter_buffer_size != buffer_size.end(); ++iter_buffer_size) {
+      size_t local_buffer_size = (*iter_buffer_size) * 4096;
       size_t inst_num = 1024 * 1024 * 512;
       auto start = std::chrono::high_resolution_clock::now();
-      inst_bw(reinterpret_cast<void*>(p), local_buffer_size, inst_num / local_buffer_size);
+      inst_bwsmla(reinterpret_cast<void*>(p), local_buffer_size, inst_num / local_buffer_size);
       auto end = std::chrono::high_resolution_clock::now();
       auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
       float gop_per_second = inst_num  / 1000.0 / (diff.count()) ;
-      std::cerr << "buffer = " << 1.0 * local_buffer_size / 1024.0 << "KB; "<<"time:"<<diff.count()/1000.0<<  " ms " << gop_per_second << "Gops/s";
-      free(p);
+      std::cerr << "buffer = " << 1.0 * local_buffer_size / 1024.0 << "KB; "<<"time:"<<diff.count()/1000.0<<  " ms " << gop_per_second << "GInst/s";
     std::cerr << std::endl;
   }
+      free(p);
 }
 
 
@@ -189,11 +190,11 @@ int main(int argc, char* argv[]) {
   //printf("load:\n");
   //benchmark_memory_ldr_bw(mhz_freq);
 //  printf("inst:\n");
-//  benchmark_inst_bw(mhz_freq);
+  benchmark_inst_bw(mhz_freq);
   //printf("store:\n");
   //benchmark_memory_str_bw(mhz_freq);
 //printf("copy:\n");
-    benchmark_memory_copy_bw(mhz_freq);
+  //  benchmark_memory_copy_bw(mhz_freq);
 //printf("latency:\n");
 //  benchmark_memory_latency(mhz_freq);
     //benchmark_memory_copy_intrin_bw(mhz_freq);

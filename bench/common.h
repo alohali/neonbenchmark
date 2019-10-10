@@ -151,6 +151,113 @@ void ldr_bw(void *p, size_t length, size_t stride, size_t loop) {
   }
 }
 
+void inst_bwsmla(void *p, size_t length,  size_t loop) {
+  size_t iteration = length;
+  assert((iteration % 32) == 0);
+  for (size_t l = 0; l < loop; ++l) { 
+    void *temp_p = p;
+    void *temp_p1 = p+512;
+    void *temp_p2 = p+2*512;
+    void *temp_p3 = p+3*384;
+    void *temp_p4 = p+4*384;
+
+    __asm__ __volatile__ (
+      "mov x10, %0\n"
+      "mov x11, %2\n"
+      "mov x12, %3\n"
+      "mov x13, %4\n"
+      "mov x14, %5\n"
+      ".align 2\n"
+      "1:\n"
+      ".rept 2\n"
+#ifdef __aarch64__
+
+        "ld1 {v14.16b}, [x11]\n"
+        "smull v0.8h, v12.8b, v8.8b\n"
+        "ld1 {v15.16b}, [x12]\n"
+        "smull v1.8h, v13.8b, v8.8b\n"
+
+        "smull v2.8h, v14.8b, v8.8b\n"
+        "ld1 {v10.16b, v11.16b}, [x10], #32\n"
+        "smull v3.8h, v15.8b, v8.8b\n"
+        "smlal2 v0.8h, v12.16b, v8.16b\n"
+        "smlal2 v1.8h, v13.16b, v8.16b\n"
+        "smlal2 v2.8h, v14.16b, v8.16b\n"
+        "smlal2 v3.8h, v15.16b, v8.16b\n"
+        "sadalp v16.4s, v0.8h\n"
+        "smull v4.8h, v12.8b, v9.8b\n"
+        "sadalp v17.4s, v1.8h\n"
+        "smull v5.8h, v13.8b, v9.8b\n"
+        "sadalp v18.4s, v2.8h\n"
+        "smull v6.8h, v14.8b, v9.8b\n"
+        "sadalp v19.4s, v3.8h\n"
+        "smull v7.8h, v15.8b, v9.8b\n"
+        "smlal2 v4.8h, v12.16b, v9.16b\n"
+        "smlal2 v5.8h, v13.16b, v9.16b\n"
+        "smlal2 v6.8h, v14.16b, v9.16b\n"
+        "smlal2 v7.8h, v15.16b, v9.16b\n"
+        "sadalp v20.4s, v4.8h\n"
+
+        "ld1 {v8.16b, v9.16b}, [x10], #32\n"
+        "smull v0.8h, v12.8b, v10.8b\n"
+        "sadalp v21.4s, v5.8h\n"
+        "smull v1.8h, v13.8b, v10.8b\n"
+        "sadalp v22.4s, v6.8h\n"
+        "smull v2.8h, v14.8b, v10.8b\n"
+        "sadalp v23.4s, v7.8h\n"
+        "smull v3.8h, v15.8b, v10.8b\n"
+        "smlal2 v0.8h, v12.16b, v10.16b\n"
+		"sub x10, x10, #64\n"
+        "smlal2 v1.8h, v13.16b, v10.16b\n"
+        "smlal2 v2.8h, v14.16b, v10.16b\n"
+        "smlal2 v3.8h, v15.16b, v10.16b\n"
+        "sadalp v24.4s, v0.8h\n"
+        "smull v4.8h, v12.8b, v11.8b\n"
+        "sadalp v25.4s, v1.8h\n"
+        "smull v5.8h, v13.8b, v11.8b\n"
+        "sadalp v26.4s, v2.8h\n"
+        "smull v6.8h, v14.8b, v11.8b\n"
+        "sadalp v27.4s, v3.8h\n"
+        "smull v7.8h, v15.8b, v11.8b\n"
+        "smlal2 v4.8h, v12.16b, v11.16b\n"
+        "ld1 {v12.16b}, [x13]\n"
+        "smlal2 v5.8h, v13.16b, v11.16b\n"
+        "ld1 {v13.16b}, [x14]\n"
+        "smlal2 v6.8h, v14.16b, v11.16b\n"
+        "smlal2 v7.8h, v15.16b, v11.16b\n"
+        "sadalp v28.4s, v4.8h\n"
+        "sadalp v29.4s, v5.8h\n"
+        "sadalp v30.4s, v6.8h\n"
+        "sadalp v31.4s, v7.8h\n"
+#else
+      "vmla.f32 d0,d0,d0\n"
+      "vmla.f32 d1,d1,d1\n"
+      "vmla.f32 d2,d2,d2\n"
+      "vmla.f32 d3,d3,d3\n"
+      "vmla.f32 d4,d4,d4\n"
+      "vmla.f32 d5,d5,d5\n"
+      "vmla.f32 d6,d6,d6\n"
+      "vmla.f32 d7,d7,d7\n"
+      "vmla.f32 d8,d8,d8\n"
+      "vmla.f32 d9,d9,d9\n"
+      "vmla.f32 d10,d10,d10\n"
+      "vmla.f32 d11,d11,d11\n"
+      "vmla.f32 d12,d12,d12\n"
+      "vmla.f32 d13,d13,d13\n"
+      "vmla.f32 d14,d14,d14\n"
+      "vmla.f32 d15,d15,d15\n"
+#endif
+      ".endr\n"
+      "subs %1, %1, #1\n"
+      "bne 1b\n"
+      :
+      :"r"(temp_p),"r"(iteration / 64), "r"(temp_p1), "r"(temp_p2), "r"(temp_p3), "r"(temp_p4)
+      :"cc","r0","r1","r2","r3","r4","q0","q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15", "q16", "q17", "q18", "q19", "q20", "q21", "q22", "q23","x10", "x11", "x12", "x13", "x14"
+
+      );
+  }
+}
+
 void inst_bw(void *p, size_t length,  size_t loop) {
   size_t iteration = length;
   assert((iteration % 32) == 0);
@@ -161,14 +268,22 @@ void inst_bw(void *p, size_t length,  size_t loop) {
       "1:\n"
       ".rept 4\n"
 #ifdef __aarch64__
-      "fabs v0.4s, v0.4s\n"
-      "fabs v1.4s, v1.4s\n"
-      "fabs v2.4s, v2.4s\n"
-      "fabs v3.4s, v3.4s\n"
-      "fabs v4.4s, v4.4s\n"
-      "fabs v5.4s, v5.4s\n"
-      "fabs v6.4s, v6.4s\n"
-      "fabs v7.4s, v7.4s\n"
+      "fmla v0.4s, v0.4s,v0.4s\n"
+      "fmla v1.4s, v1.4s,v1.4s\n"
+      "fmla v2.4s, v2.4s,v2.4s\n"
+      "fmla v3.4s, v3.4s,v3.4s\n"
+      "fmla v4.4s, v4.4s,v4.4s\n"
+      "fmla v5.4s, v5.4s,v5.4s\n"
+      "fmla v6.4s, v6.4s,v6.4s\n"
+      "fmla v7.4s, v7.4s,v7.4s\n"
+      "fmla v8.4s, v8.4s,v8.4s\n"
+      "fmla v9.4s, v9.4s,v9.4s\n"
+      "fmla v10.4s, v10.4s, v10.4s\n"
+      "fmla v11.4s, v11.4s, v11.4s\n"
+      "fmla v12.4s, v12.4s, v12.4s\n"
+      "fmla v13.4s, v13.4s, v13.4s\n"
+      "fmla v14.4s, v14.4s, v14.4s\n"
+      "fmla v15.4s, v15.4s, v15.4s\n"
 #else
       "vmla.f32 d0,d0,d0\n"
       "vmla.f32 d1,d1,d1\n"
