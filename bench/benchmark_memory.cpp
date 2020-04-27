@@ -42,7 +42,7 @@ void benchmark_inst_bw(size_t mhz_freq) {
       size_t local_buffer_size = (*iter_buffer_size) * 4096;
       size_t inst_num = 1024 * 1024 * 512;
       auto start = std::chrono::high_resolution_clock::now();
-      inst_bwsmla(reinterpret_cast<void*>(p), local_buffer_size, inst_num / local_buffer_size);
+      inst_bw(reinterpret_cast<void*>(p), local_buffer_size, inst_num / local_buffer_size);
       auto end = std::chrono::high_resolution_clock::now();
       auto diff = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
